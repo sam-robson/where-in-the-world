@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Where in the World?</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --ocean:#9fc6e0; --land:#e9e4d8; --land-stroke:#b9b09a;
+    --ink:#1f2937; --accent:#2563eb; --good:#16a34a; --bad:#dc2626; --panel:#ffffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0;background:var(--ocean);cursor:crosshair;z-index:0}
+  .leaflet-container{background:var(--ocean)}
+
+  /* Top HUD */
+  #hud{position:absolute;top:0;left:0;right:0;z-index:500;display:flex;gap:10px;align-items:center;justify-content:center;
+       padding:10px;pointer-events:none}
+  .card{background:var(--panel);border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:auto}
+  #prompt{padding:10px 18px;display:flex;flex-direction:column;align-items:center;min-width:240px}
+  #prompt .label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:600}
+  #prompt .country{font-size:24px;font-weight:800;line-height:1.1;text-align:center}
+  #stats{display:flex;gap:0}
+  #stats .stat{padding:10px 16px;text-align:center;border-right:1px solid #eee}
+  #stats .stat:last-child{border-right:none}
+  #stats .num{font-size:20px;font-weight:800}
+  #stats .cap{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em}
+
+  /* Bottom feedback bar */
+  #feedback{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:500;
+            padding:12px 18px;display:none;align-items:center;gap:16px;max-width:92vw}
+  #feedback .msg{font-size:16px;font-weight:700}
+  #feedback .sub{font-size:13px;color:#6b7280}
+  button{font:inherit;font-weight:700;border:none;border-radius:10px;padding:10px 18px;background:var(--accent);color:#fff;cursor:pointer}
+  button:hover{filter:brightness(1.05)} button:active{transform:translateY(1px)}
+
+  /* Overlays (start / end) */
+  .overlay{position:absolute;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;
+           background:rgba(17,24,39,.55);backdrop-filter:blur(3px)}
+  .modal{background:#fff;border-radius:20px;padding:28px 30px;max-width:440px;width:90vw;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal h1{margin:0 0 6px;font-size:30px}
+  .modal p{margin:6px 0;color:#4b5563;line-height:1.5}
+  .modal .big{font-size:46px;font-weight:900;margin:8px 0 0}
+  .modal .rate{font-size:18px;font-weight:700;color:var(--accent);margin:2px 0 14px}
+  .seg{display:inline-flex;background:#f1f3f5;border-radius:12px;padding:4px;margin:14px 0 18px;gap:4px}
+  .seg button{background:transparent;color:var(--ink);padding:8px 16px}
+  .seg button.active{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  .hint{font-size:13px;color:#6b7280;margin-top:6px}
+  @media (max-width:560px){
+    #prompt .country{font-size:20px} #stats .num{font-size:17px} #hud{flex-direction:column;gap:8px}
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="hud">
+  <div class="card" id="prompt">
+    <div class="label">Find this country</div>
+    <div class="country" id="targetName">—</div>
+  </div>
+  <div class="card" id="stats">
+    <div class="stat"><div class="num" id="roundNum">1</div><div class="cap">Round</div></div>
+    <div class="stat"><div class="num" id="scoreNum">0</div><div class="cap">Score</div></div>
+  </div>
+</div>
+
+<div class="card" id="feedback">
+  <div>
+    <div class="msg" id="fbMsg"></div>
+    <div class="sub" id="fbSub"></div>
+  </div>
+  <button id="nextBtn">Next →</button>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="modal">
+    <h1>🌍 Where in the World?</h1>
+    <p>A country name appears — click where you think it is on the map. The closer your click, the more points (up to 5000 for a bullseye).</p>
+    <div class="seg" id="difficulty">
+      <button data-diff="easy" class="active">Easy</button>
+      <button data-diff="all">All countries</button>
+    </div>
+    <p class="hint" id="diffHint">Easy = ~90 better-known countries · 10 rounds</p>
+    <div><button id="startBtn">Start game</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="endOverlay" style="display:none">
+  <div class="modal">
+    <h1>Round complete!</h1>
+    <p>Your score</p>
+    <div class="big"><span id="finalScore">0</span><span style="font-size:22px;color:#9ca3af">/<span id="maxScore">50000</span></span></div>
+    <div class="rate" id="rating">—</div>
+    <div><button id="againBtn">Play again</button></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script>
+const TOTAL_ROUNDS = 10;
+const MAX_PER_ROUND = 5000;
+
+let map, countriesLayer;
+let featureByName = {};   // name -> GeoJSON feature
+let layerByName = {};     // name -> Leaflet layer
+let playable = [];        // list of names for current difficulty
+let queue = [];           // shuffled names for this game
+let round = 0, score = 0, difficulty = 'easy', guessed = false;
+let tempLayers = [];      // marker + line, cleared each round
+
+const baseStyle = {color:'#b9b09a', weight:0.8, fillColor:'#e9e4d8', fillOpacity:1};
+const targetStyle = {color:'#15803d', weight:2.5, fillColor:'#22c55e', fillOpacity:0.85};
+
+const $ = id => document.getElementById(id);
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function isPlayable(props){
+  const cont = props.CONTINENT;
+  if (cont === 'Antarctica' || cont === 'Seven seas (open ocean)') return false;
+  if (['N. Cyprus','Fr. S. Antarctic Lands'].includes(props.NAME)) return false;
+  return true;
+}
+
+async function init(){
+  map = L.map('map', {
+    minZoom:2, maxZoom:6, worldCopyJump:false, zoomControl:true, attributionControl:false,
+    maxBounds:[[-85,-200],[85,200]], maxBoundsViscosity:0.7
+  });
+  map.setView([20,0], 2);
+
+  const data = await fetch('https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_admin_0_countries.geojson').then(r=>r.json());
+  countriesLayer = L.geoJSON(data, {
+    style: baseStyle,
+    onEachFeature: (feature, layer) => {
+      const name = feature.properties.NAME;
+      featureByName[name] = feature;
+      layerByName[name] = layer;
+    }
+  }).addTo(map);
+
+  map.on('click', onMapClick);
+
+  // difficulty buttons
+  $('difficulty').querySelectorAll('button').forEach(b=>{
+    b.onclick = () => {
+      $('difficulty').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      difficulty = b.dataset.diff;
+      $('diffHint').textContent = difficulty==='easy'
+        ? 'Easy = ~90 better-known countries · 10 rounds'
+        : 'All = every country on the map · 10 rounds';
+    };
+  });
+  $('startBtn').onclick = startGame;
+  $('againBtn').onclick = () => { $('endOverlay').style.display='none'; startGame(); };
+  $('nextBtn').onclick = nextRound;
+}
+
+function buildPlayable(){
+  const names = Object.keys(featureByName).filter(n=>isPlayable(featureByName[n].properties));
+  if (difficulty === 'easy'){
+    return names.filter(n => (featureByName[n].properties.POP_EST||0) >= 5000000);
+  }
+  return names;
+}
+
+function startGame(){
+  $('startOverlay').style.display='none';
+  playable = buildPlayable();
+  queue = shuffle(playable.slice());
+  round = 0; score = 0;
+  $('scoreNum').textContent = '0';
+  resetStyles();
+  nextRound();
+}
+
+function resetStyles(){
+  countriesLayer.setStyle(baseStyle);
+  tempLayers.forEach(l=>map.removeLayer(l)); tempLayers=[];
+}
+
+function nextRound(){
+  resetStyles();
+  $('feedback').style.display='none';
+  if (round >= TOTAL_ROUNDS || queue.length === 0){ return endGame(); }
+  round++;
+  guessed = false;
+  const name = queue.pop();
+  window.currentTarget = name;
+  $('targetName').textContent = name;
+  $('roundNum').textContent = round;
+}
+
+function countryDistanceKm(point, feature){
+  try {
+    if (turf.booleanPointInPolygon(point, feature)) return 0;
+  } catch(e){}
+  const line = turf.polygonToLine(feature);
+  const lines = line.type === 'FeatureCollection' ? line.features : [line];
+  let min = Infinity;
+  for (const l of lines){
+    try {
+      const snapped = turf.nearestPointOnLine(l, point, {units:'kilometers'});
+      if (snapped.properties.dist < min) min = snapped.properties.dist;
+    } catch(e){}
+  }
+  return min === Infinity ? null : min;
+}
+
+function onMapClick(e){
+  if (guessed || round===0 || !window.currentTarget) return;
+  guessed = true;
+  const name = window.currentTarget;
+  const feature = featureByName[name];
+  const pt = turf.point([e.latlng.lng, e.latlng.lat]);
+
+  const d = countryDistanceKm(pt, feature);
+  const inside = d === 0;
+  const pts = inside ? MAX_PER_ROUND : Math.max(0, Math.round(MAX_PER_ROUND * Math.exp(-(d||99999)/2000)));
+  score += pts;
+  $('scoreNum').textContent = score;
+
+  // highlight the real country
+  layerByName[name].setStyle(targetStyle);
+  layerByName[name].bringToFront();
+
+  // marker at guess
+  const marker = L.circleMarker(e.latlng, {radius:6, color:'#1d4ed8', weight:2, fillColor:'#3b82f6', fillOpacity:1}).addTo(map);
+  tempLayers.push(marker);
+
+  // line from guess to country centroid
+  let centroidLatLng;
+  try {
+    const c = turf.centroid(feature).geometry.coordinates;
+    centroidLatLng = [c[1], c[0]];
+    const line = L.polyline([e.latlng, centroidLatLng], {color:'#1d4ed8', weight:2, dashArray:'6 6', opacity:.8}).addTo(map);
+    tempLayers.push(line);
+  } catch(err){}
+
+  // feedback
+  $('fbMsg').textContent = inside ? `🎯 Bullseye! +${pts}` : `${Math.round(d).toLocaleString()} km away · +${pts}`;
+  $('fbMsg').style.color = inside ? 'var(--good)' : (pts>1500 ? 'var(--ink)' : 'var(--bad)');
+  $('fbSub').textContent = `That's ${name}.` + (round>=TOTAL_ROUNDS ? '  (last round)' : '');
+  $('nextBtn').textContent = round>=TOTAL_ROUNDS ? 'See results →' : 'Next →';
+  $('feedback').style.display='flex';
+
+  // fit both points in view
+  try {
+    const g = countriesLayer; // not used; build bounds manually
+    const b = L.latLngBounds([e.latlng]);
+    if (centroidLatLng) b.extend(centroidLatLng);
+    b.extend(layerByName[name].getBounds());
+    map.fitBounds(b.pad(0.3), {maxZoom:5, animate:true});
+  } catch(err){}
+}
+
+function endGame(){
+  const max = TOTAL_ROUNDS*MAX_PER_ROUND;
+  $('finalScore').textContent = score.toLocaleString();
+  $('maxScore').textContent = max.toLocaleString();
+  const pct = score/max;
+  let rate = 'Keep practising! 🗺️';
+  if (pct>0.9) rate='World-class geographer! 🌟';
+  else if (pct>0.75) rate='Excellent! 🌍';
+  else if (pct>0.55) rate='Solid effort! 👍';
+  else if (pct>0.35) rate='Not bad — room to grow.';
+  $('rating').textContent = rate;
+  $('endOverlay').style.display='flex';
+}
+
+init();
+</script>
+<img alt="" src="http://us-east-1.resend-clicks.com/CI0/0100019ecab7d2a9-55d91084-a3cb-4d10-9a13-464fbfa404b6-000000/PdYqatqGrf558NhSxkEn0ZYW8QddSx9gNKp1ECn3smk=452" style="display: none; width: 1px; height: 1px;">
+</body>
+</html>
