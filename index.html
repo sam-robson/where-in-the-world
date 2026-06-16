@@ -8,7 +8,7 @@
 <style>
   :root{
     --ocean:#9fc6e0; --land:#e9e4d8; --land-stroke:#b9b09a;
-    --ink:#1f2937; --accent:#2563eb; --good:#16a34a; --bad:#dc2626; --panel:#ffffff;
+    --ink:#1f2937; --accent:#2563eb; --good:#16a34a; --bad:#dc2626; --panel:#ffffff; --gold:#f59e0b;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
@@ -35,19 +35,39 @@
   #feedback .sub{font-size:13px;color:#6b7280}
   button{font:inherit;font-weight:700;border:none;border-radius:10px;padding:10px 18px;background:var(--accent);color:#fff;cursor:pointer}
   button:hover{filter:brightness(1.05)} button:active{transform:translateY(1px)}
+  button:disabled{cursor:not-allowed;filter:none}
 
   /* Overlays (start / end) */
   .overlay{position:absolute;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;
            background:rgba(17,24,39,.55);backdrop-filter:blur(3px)}
-  .modal{background:#fff;border-radius:20px;padding:28px 30px;max-width:440px;width:90vw;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-  .modal h1{margin:0 0 6px;font-size:30px}
+  .modal{background:#fff;border-radius:20px;padding:24px 28px;max-width:460px;width:92vw;max-height:92vh;overflow:auto;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal h1{margin:0 0 6px;font-size:28px}
   .modal p{margin:6px 0;color:#4b5563;line-height:1.5}
   .modal .big{font-size:46px;font-weight:900;margin:8px 0 0}
-  .modal .rate{font-size:18px;font-weight:700;color:var(--accent);margin:2px 0 14px}
-  .seg{display:inline-flex;background:#f1f3f5;border-radius:12px;padding:4px;margin:14px 0 18px;gap:4px}
-  .seg button{background:transparent;color:var(--ink);padding:8px 16px}
+  .modal .max{font-size:22px;color:#9ca3af}
+  .modal .rate{font-size:18px;font-weight:700;color:var(--accent);margin:2px 0 10px}
+  .intro{font-size:14px}
+
+  .field{margin:12px 0;text-align:left}
+  .flabel{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;font-weight:700;margin-bottom:6px}
+  .seg{display:flex;flex-wrap:wrap;background:#f1f3f5;border-radius:12px;padding:4px;gap:4px}
+  .seg button{background:transparent;color:var(--ink);padding:8px 14px;font-size:14px}
   .seg button.active{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+
+  .packgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:240px;overflow:auto;margin:6px 0 4px;padding:2px}
+  .pack{display:flex;flex-direction:column;align-items:center;gap:2px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:10px 6px;color:var(--ink)}
+  .pack:hover{border-color:var(--accent)}
+  .pack .pname{font-weight:800;font-size:14px}
+  .pack .pmeta{font-size:11px;color:#6b7280}
+  .pack .pstars{font-size:14px;color:var(--gold);letter-spacing:1px}
+  .pack.locked{opacity:.55;cursor:not-allowed;background:#f1f3f5}
+  .pack.locked:hover{border-color:#e5e7eb}
+
+  .stars{font-size:32px;color:var(--gold);letter-spacing:4px;margin:4px 0;min-height:8px}
   .hint{font-size:13px;color:#6b7280;margin-top:6px}
+  .endbtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .endbtns button.secondary{background:#eef2f7;color:var(--ink)}
+
   @media (max-width:560px){
     #prompt .country{font-size:20px} #stats .num{font-size:17px} #hud{flex-direction:column;gap:8px}
   }
@@ -78,54 +98,130 @@
 <div class="overlay" id="startOverlay">
   <div class="modal">
     <h1>🌍 Where in the World?</h1>
-    <p>A country name appears — click where you think it is on the map. The closer your click, the more points (up to 5000 for a bullseye).</p>
-    <div class="seg" id="difficulty">
-      <button data-diff="easy" class="active">Easy</button>
-      <button data-diff="all">All countries</button>
+    <p class="intro">A country name appears — click where you think it is. The closer your click, the more points (up to 5000 for a bullseye).</p>
+
+    <div class="field">
+      <div class="flabel">Region</div>
+      <div class="seg" id="regionSeg">
+        <button data-region="well-known" class="active">⭐ Well-known</button>
+        <button data-region="all">🌍 All</button>
+        <button data-region="Africa">Africa</button>
+        <button data-region="Asia">Asia</button>
+        <button data-region="Europe">Europe</button>
+        <button data-region="North America">N. America</button>
+        <button data-region="South America">S. America</button>
+        <button data-region="Oceania">Oceania</button>
+      </div>
     </div>
-    <p class="hint" id="diffHint">Easy = ~90 better-known countries · 10 rounds</p>
-    <div><button id="startBtn">Start game</button></div>
+
+    <div class="field">
+      <div class="flabel">Mode</div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="quick" class="active">Quick play</button>
+        <button data-mode="packs">Learn in packs</button>
+      </div>
+    </div>
+
+    <div class="field" id="sizeField" style="display:none">
+      <div class="flabel">Pack size</div>
+      <div class="seg" id="sizeSeg">
+        <button data-size="5">5</button>
+        <button data-size="10" class="active">10</button>
+        <button data-size="20">20</button>
+      </div>
+    </div>
+
+    <div id="packGrid" class="packgrid" style="display:none"></div>
+
+    <p class="hint" id="startHint"></p>
+    <div id="quickStartWrap"><button id="startBtn">Start game</button></div>
   </div>
 </div>
 
 <div class="overlay" id="endOverlay" style="display:none">
   <div class="modal">
-    <h1>Round complete!</h1>
+    <h1 id="endTitle">Game complete!</h1>
+    <div class="stars" id="endStars"></div>
     <p>Your score</p>
-    <div class="big"><span id="finalScore">0</span><span style="font-size:22px;color:#9ca3af">/<span id="maxScore">50000</span></span></div>
+    <div class="big"><span id="finalScore">0</span><span class="max">/<span id="maxScore">50000</span></span></div>
     <div class="rate" id="rating">—</div>
-    <div><button id="againBtn">Play again</button></div>
+    <p class="hint" id="bestLine"></p>
+    <div class="endbtns" id="endButtons"></div>
   </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 <script>
-const TOTAL_ROUNDS = 10;
+const QUICK_ROUNDS = 10;
 const MAX_PER_ROUND = 5000;
+const SAVE_KEY = 'witw_v1';
+
+const REGION_LABELS = {
+  'well-known':'⭐ Well-known countries', 'all':'🌍 All countries',
+  'Africa':'Africa', 'Asia':'Asia', 'Europe':'Europe',
+  'North America':'North America', 'South America':'South America', 'Oceania':'Oceania'
+};
 
 let map, countriesLayer;
 let featureByName = {};   // name -> GeoJSON feature
 let layerByName = {};     // name -> Leaflet layer
-let playable = [];        // list of names for current difficulty
-let queue = [];           // shuffled names for this game
-let round = 0, score = 0, difficulty = 'easy', guessed = false;
+let queue = [];           // names remaining this game
+let roundsTotal = 0, round = 0, score = 0, guessed = false;
 let tempLayers = [];      // marker + line, cleared each round
+let currentTarget = null;
 
-const baseStyle = {color:'#b9b09a', weight:0.8, fillColor:'#e9e4d8', fillOpacity:1};
+const state = { region:'well-known', mode:'quick', packSize:10, packIndex:0 };
+
+const baseStyle   = {color:'#b9b09a', weight:0.8, fillColor:'#e9e4d8', fillOpacity:1};
 const targetStyle = {color:'#15803d', weight:2.5, fillColor:'#22c55e', fillOpacity:0.85};
 
 const $ = id => document.getElementById(id);
-
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
+/* ---- persistence (local high scores) ---- */
+function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }catch(e){ return {}; } }
+function writeSave(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} }
+let save = loadSave();
+
+/* ---- country selection ---- */
 function isPlayable(props){
   const cont = props.CONTINENT;
   if (cont === 'Antarctica' || cont === 'Seven seas (open ocean)') return false;
   if (['N. Cyprus','Fr. S. Antarctic Lands'].includes(props.NAME)) return false;
   return true;
 }
+function pop(n){ return featureByName[n].properties.POP_EST || 0; }
 
+function regionNames(region){
+  let names = Object.keys(featureByName).filter(n=>isPlayable(featureByName[n].properties));
+  if (region === 'well-known') return names.filter(n => pop(n) >= 5000000);
+  if (region === 'all') return names;
+  return names.filter(n => featureByName[n].properties.CONTINENT === region);
+}
+// sorted most-populous first, so packs introduce the famous countries before the obscure ones
+function regionNamesSorted(region){ return regionNames(region).sort((a,b)=>pop(b)-pop(a)); }
+
+function packsFor(region, size){
+  const all = regionNamesSorted(region);
+  const packs = [];
+  for (let i=0;i<all.length;i+=size) packs.push(all.slice(i, i+size));
+  return packs;
+}
+
+/* ---- save accessors ---- */
+function quickBest(region){ return (save.quickBest && save.quickBest[region]) || 0; }
+function packRec(region, size, idx){ return save.packs?.[region]?.[size]?.[idx] || null; }
+function savePackRec(region, size, idx, rec){
+  save.packs = save.packs || {};
+  save.packs[region] = save.packs[region] || {};
+  save.packs[region][size] = save.packs[region][size] || {};
+  save.packs[region][size][idx] = rec;
+  writeSave();
+}
+function packUnlocked(region, size, idx){ return idx === 0 || !!packRec(region, size, idx-1); }
+
+/* ---- init ---- */
 async function init(){
   map = L.map('map', {
     minZoom:2, maxZoom:6, worldCopyJump:false, zoomControl:true, attributionControl:false,
@@ -145,61 +241,107 @@ async function init(){
 
   map.on('click', onMapClick);
 
-  // difficulty buttons
-  $('difficulty').querySelectorAll('button').forEach(b=>{
-    b.onclick = () => {
-      $('difficulty').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      difficulty = b.dataset.diff;
-      $('diffHint').textContent = difficulty==='easy'
-        ? 'Easy = ~90 better-known countries · 10 rounds'
-        : 'All = every country on the map · 10 rounds';
-    };
-  });
-  $('startBtn').onclick = startGame;
-  $('againBtn').onclick = () => { $('endOverlay').style.display='none'; startGame(); };
+  $('regionSeg').querySelectorAll('button').forEach(b=> b.onclick = () => { segSelect('regionSeg', b); state.region = b.dataset.region; syncStartUI(); });
+  $('modeSeg').querySelectorAll('button').forEach(b=> b.onclick = () => { segSelect('modeSeg', b); state.mode = b.dataset.mode; syncStartUI(); });
+  $('sizeSeg').querySelectorAll('button').forEach(b=> b.onclick = () => { segSelect('sizeSeg', b); state.packSize = +b.dataset.size; renderPackGrid(); });
+
+  $('startBtn').onclick = beginQuick;
   $('nextBtn').onclick = nextRound;
+
+  syncStartUI();
 }
 
-function buildPlayable(){
-  const names = Object.keys(featureByName).filter(n=>isPlayable(featureByName[n].properties));
-  if (difficulty === 'easy'){
-    return names.filter(n => (featureByName[n].properties.POP_EST||0) >= 5000000);
+function segSelect(segId, btn){
+  $(segId).querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* ---- start screen ---- */
+function syncStartUI(){
+  const packs = state.mode === 'packs';
+  $('sizeField').style.display   = packs ? 'block' : 'none';
+  $('packGrid').style.display    = packs ? 'grid'  : 'none';
+  $('quickStartWrap').style.display = packs ? 'none' : 'block';
+
+  if (packs){
+    renderPackGrid();
+    $('startHint').textContent = 'Pick a pack. Finish one to unlock the next. Stars show how well you did.';
+  } else {
+    const count = Math.min(QUICK_ROUNDS, regionNames(state.region).length);
+    const best = quickBest(state.region);
+    $('startHint').textContent = `${count} random countries from ${REGION_LABELS[state.region]}`
+      + (best ? ` · Best: ${best.toLocaleString()}` : '');
   }
-  return names;
 }
 
-function startGame(){
-  $('startOverlay').style.display='none';
-  playable = buildPlayable();
-  queue = shuffle(playable.slice());
+function renderPackGrid(){
+  const grid = $('packGrid'); grid.innerHTML = '';
+  const packs = packsFor(state.region, state.packSize);
+  packs.forEach((p, i) => {
+    const unlocked = packUnlocked(state.region, state.packSize, i);
+    const rec = packRec(state.region, state.packSize, i);
+    const btn = document.createElement('button');
+    btn.className = 'pack' + (unlocked ? '' : ' locked');
+    btn.innerHTML = `<div class="pname">Pack ${i+1}</div>`
+      + `<div class="pmeta">${p.length} countr${p.length===1?'y':'ies'}</div>`
+      + `<div class="pstars">${unlocked ? starStr(rec ? rec.stars : 0) : '🔒'}</div>`;
+    if (unlocked) btn.onclick = () => beginPack(i);
+    else btn.disabled = true;
+    grid.appendChild(btn);
+  });
+}
+function starStr(n){ return '★'.repeat(n) + '☆'.repeat(3-n); }
+function starsFor(pct){ return pct>=0.9 ? 3 : pct>=0.7 ? 2 : pct>=0.5 ? 1 : 0; }
+
+/* ---- game flow ---- */
+function beginQuick(){
+  state.mode = 'quick';
+  const names = regionNames(state.region);
+  startRounds(shuffle(names.slice()).slice(0, Math.min(QUICK_ROUNDS, names.length)));
+}
+function beginPack(idx){
+  state.mode = 'packs';
+  state.packIndex = idx;
+  const pack = packsFor(state.region, state.packSize)[idx];
+  startRounds(shuffle(pack.slice()));
+}
+function startRounds(list){
+  $('startOverlay').style.display = 'none';
+  $('endOverlay').style.display = 'none';
+  queue = list; roundsTotal = list.length;
   round = 0; score = 0;
   $('scoreNum').textContent = '0';
   resetStyles();
   nextRound();
 }
 
+function showMenu(){
+  $('endOverlay').style.display = 'none';
+  $('feedback').style.display = 'none';
+  resetStyles();
+  $('startOverlay').style.display = 'flex';
+  syncStartUI();
+}
+
 function resetStyles(){
   countriesLayer.setStyle(baseStyle);
-  tempLayers.forEach(l=>map.removeLayer(l)); tempLayers=[];
+  tempLayers.forEach(l=>map.removeLayer(l)); tempLayers = [];
 }
 
 function nextRound(){
   resetStyles();
-  $('feedback').style.display='none';
-  if (round >= TOTAL_ROUNDS || queue.length === 0){ return endGame(); }
+  $('feedback').style.display = 'none';
+  if (round >= roundsTotal || queue.length === 0){ return endGame(); }
   round++;
   guessed = false;
-  const name = queue.pop();
-  window.currentTarget = name;
-  $('targetName').textContent = name;
+  currentTarget = queue.pop();
+  $('targetName').textContent = currentTarget;
   $('roundNum').textContent = round;
 }
 
+/* ---- scoring & guess handling ---- */
 function countryDistanceKm(point, feature){
-  try {
-    if (turf.booleanPointInPolygon(point, feature)) return 0;
-  } catch(e){}
+  try { if (turf.booleanPointInPolygon(point, feature)) return 0; } catch(e){}
   const line = turf.polygonToLine(feature);
   const lines = line.type === 'FeatureCollection' ? line.features : [line];
   let min = Infinity;
@@ -211,11 +353,17 @@ function countryDistanceKm(point, feature){
   }
   return min === Infinity ? null : min;
 }
+function findCountryAt(point){
+  for (const n in featureByName){
+    try { if (turf.booleanPointInPolygon(point, featureByName[n])) return n; } catch(e){}
+  }
+  return null;
+}
 
 function onMapClick(e){
-  if (guessed || round===0 || !window.currentTarget) return;
+  if (guessed || round === 0 || !currentTarget) return;
   guessed = true;
-  const name = window.currentTarget;
+  const name = currentTarget;
   const feature = featureByName[name];
   const pt = turf.point([e.latlng.lng, e.latlng.lat]);
 
@@ -225,15 +373,12 @@ function onMapClick(e){
   score += pts;
   $('scoreNum').textContent = score;
 
-  // highlight the real country
   layerByName[name].setStyle(targetStyle);
   layerByName[name].bringToFront();
 
-  // marker at guess
   const marker = L.circleMarker(e.latlng, {radius:6, color:'#1d4ed8', weight:2, fillColor:'#3b82f6', fillOpacity:1}).addTo(map);
   tempLayers.push(marker);
 
-  // line from guess to country centroid
   let centroidLatLng;
   try {
     const c = turf.centroid(feature).geometry.coordinates;
@@ -242,16 +387,22 @@ function onMapClick(e){
     tempLayers.push(line);
   } catch(err){}
 
-  // feedback
+  // feedback — including which country the click actually landed on
   $('fbMsg').textContent = inside ? `🎯 Bullseye! +${pts}` : `${Math.round(d).toLocaleString()} km away · +${pts}`;
   $('fbMsg').style.color = inside ? 'var(--good)' : (pts>1500 ? 'var(--ink)' : 'var(--bad)');
-  $('fbSub').textContent = `That's ${name}.` + (round>=TOTAL_ROUNDS ? '  (last round)' : '');
-  $('nextBtn').textContent = round>=TOTAL_ROUNDS ? 'See results →' : 'Next →';
-  $('feedback').style.display='flex';
+  let sub;
+  if (inside){
+    sub = `That's ${name}.`;
+  } else {
+    const clicked = findCountryAt(pt);
+    sub = (clicked ? `You clicked ${clicked}` : 'You clicked in the ocean') + ` — that's ${name}.`;
+  }
+  if (round >= roundsTotal) sub += '  (last round)';
+  $('fbSub').textContent = sub;
+  $('nextBtn').textContent = round >= roundsTotal ? 'See results →' : 'Next →';
+  $('feedback').style.display = 'flex';
 
-  // fit both points in view
   try {
-    const g = countriesLayer; // not used; build bounds manually
     const b = L.latLngBounds([e.latlng]);
     if (centroidLatLng) b.extend(centroidLatLng);
     b.extend(layerByName[name].getBounds());
@@ -259,22 +410,62 @@ function onMapClick(e){
   } catch(err){}
 }
 
+/* ---- end screen ---- */
 function endGame(){
-  const max = TOTAL_ROUNDS*MAX_PER_ROUND;
-  $('finalScore').textContent = score.toLocaleString();
-  $('maxScore').textContent = max.toLocaleString();
-  const pct = score/max;
+  const max = roundsTotal * MAX_PER_ROUND;
+  const pct = max ? score/max : 0;
+
   let rate = 'Keep practising! 🗺️';
   if (pct>0.9) rate='World-class geographer! 🌟';
   else if (pct>0.75) rate='Excellent! 🌍';
   else if (pct>0.55) rate='Solid effort! 👍';
   else if (pct>0.35) rate='Not bad — room to grow.';
+
+  $('finalScore').textContent = score.toLocaleString();
+  $('maxScore').textContent = max.toLocaleString();
   $('rating').textContent = rate;
-  $('endOverlay').style.display='flex';
+
+  const btns = $('endButtons'); btns.innerHTML = '';
+  const stars = $('endStars'); stars.textContent = '';
+
+  if (state.mode === 'quick'){
+    $('endTitle').textContent = 'Game complete!';
+    const prev = quickBest(state.region);
+    const isBest = score > prev;
+    if (isBest){ save.quickBest = save.quickBest || {}; save.quickBest[state.region] = score; writeSave(); }
+    $('bestLine').textContent = isBest ? '🎉 New personal best!' : `Best: ${Math.max(prev, score).toLocaleString()}`;
+    addBtn(btns, 'Play again', beginQuick);
+    addBtn(btns, 'Menu', showMenu, true);
+  } else {
+    const { region, packSize, packIndex } = state;
+    const earned = starsFor(pct);
+    stars.textContent = starStr(earned);
+    $('endTitle').textContent = `Pack ${packIndex+1} complete!`;
+    const prev = packRec(region, packSize, packIndex);
+    const newBest  = Math.max(prev ? prev.best : 0, score);
+    const newStars = Math.max(prev ? prev.stars : 0, earned);
+    const isBest = !prev || score > prev.best;
+    savePackRec(region, packSize, packIndex, { best:newBest, stars:newStars });
+    $('bestLine').textContent = isBest ? '🎉 New personal best!' : `Best: ${newBest.toLocaleString()}`;
+
+    const hasNext = packIndex + 1 < packsFor(region, packSize).length;
+    if (hasNext) addBtn(btns, 'Next pack →', () => beginPack(packIndex + 1));
+    addBtn(btns, 'Replay pack', () => beginPack(packIndex), true);
+    addBtn(btns, 'Menu', showMenu, true);
+  }
+
+  $('endOverlay').style.display = 'flex';
+}
+
+function addBtn(parent, label, onclick, secondary){
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (secondary) b.className = 'secondary';
+  b.onclick = onclick;
+  parent.appendChild(b);
 }
 
 init();
 </script>
-<img alt="" src="http://us-east-1.resend-clicks.com/CI0/0100019ecab7d2a9-55d91084-a3cb-4d10-9a13-464fbfa404b6-000000/PdYqatqGrf558NhSxkEn0ZYW8QddSx9gNKp1ECn3smk=452" style="display: none; width: 1px; height: 1px;">
 </body>
 </html>
